@@ -48,20 +48,27 @@ lexer_next(Lexer *l, Token *token)
 	int c, d, i;
 	size_t size = 1024;
 
+	l->col--;
+	if (l->c == '\n')
+		l->line--;
+
 	token->type = TOKEN_EOF;
 	for (c = l->c; c != EOF; c = l->c = l->getchar(l->data)) {
-		l->i++;
 		l->col++;
-		l->line += c == '\n';
-		l->col *= c != '\n';
+
+		if (c == '\n') {
+			l->i += l->col;
+			l->col = 0;
+			l->line++;
+		}
 
 		switch (token->type) {
 		case TOKEN_EOF:
 			if (isspace(c))
 				continue;
-			token->i    = l->i;
-			token->line = l->line;
-			token->col  = l->col;
+			token->i = l->i;
+			token->col = l->col;
+			token->line = l->line + 1;
 
 			if (isalpha(c) || c == '_') {
 				token->type = TOKEN_IDENT;

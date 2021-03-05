@@ -38,18 +38,20 @@ int
 main(int argc, char *argv[])
 {
 	FILE *fp;
-	char *src;
+	char *src, *name;
 	unsigned int len;
 	long keys[NVARS] = {0}, vals[NVARS] = {0};
 	HashMap vars = { keys, vals, NVARS };
 	Stat *stat;
 
-	fp = argc > 1? fopen(argv[1], "r") : stdin;
+	if (argc <= 1)
+		die("not enough arguments");
+	fp = fopen(argv[1], "r");
 	if (read_file(fp, &src, &len) == -1)
 		die("%s:", argv[0]);
 
-	if (!(stat = parse(src, len)))
-		die("failed to parse statement");
+	if (!(stat = parse(argv[1], src, len)))
+		die("Parsing error");
 
 	optimize(stat);
 

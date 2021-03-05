@@ -15,7 +15,9 @@ typedef struct {
 	Token t;
 	int accepted;
 	
-	const char *begin, *end;
+	const char *path;
+	const char *src;
+	unsigned int i, len;
 } Parser;
 
 static int accept(Parser *p, int type);
@@ -57,24 +59,28 @@ accept(Parser *p, int type)
 int
 error(Parser *p, const char *msg)
 {
-	fprintf(stderr, "error:%d:%d: %s\n", p->t.line, p->t.col, msg);
+	int i;
+	const char *end = strchr(p->src + p->t.i - 1, '\n');
+
+	if (!end)
+		end = p->src + p->len + 1;
+	i = end - p->src + p->t.i;
+
+	fprintf(stderr, "%s:%d:%d: %s\n", p->path, p->t.line, p->t.col, msg);
 	fprintf(stderr, "|\n"
-					"| ... %.*s ... \n"
-					"|\n", p->l.i - p->t.i + 6, p->begin + p->t.i - 3);
+					"| %.*s"
+					"| ", i, p->src + p->t.i - 1);
+	fprintf(stderr, "%*.s^ %s\n", p->t.col - 1, "", msg);
 	return -1;
 }
 
 int
 getch(Parser *p)
 {
-	char c = *p->begin;
-
-	if (p->begin < p->end) {
-		p->begin++;
-		return c;
-	} else {
+	if (p->i < p->len)
+		return p->src[p->i++];
+	else 
 		return -1;
-	}
 }
 
 int
@@ -98,13 +104,14 @@ stat(Parser *p, Stat *s)
 		if ((i = stat_assign(p, s, t))) {
 			s->type = STAT_ASSIGN;
 		} else {
+			p->t = t;
 			free(t.arg.ident);
-			return error(p, "unexpected identifier");
+			return error(p, "Unexpected identifier");
 		}
 	} else if (accept(p, ';')) {
 		s->type = STAT_EMPTY;
 	} else {
-		return 0;
+		return error(p, "Not a statement");
 	}
 	return i;
 }
@@ -112,7 +119,7 @@ stat(Parser *p, Stat *s)
 int
 stat_if(Parser *p, Stat *s)
 {
-	int i;
+	int ret;
 
 	if (!accept(p, TOKEN_IF))
 		return 0;
@@ -123,12 +130,16 @@ stat_if(Parser *p, Stat *s)
 		return -1;
 
 	s->_if.a = ecalloc(1, sizeof(Stat));
-	if ((i = stat_block(p, s->_if.a)) <= 0)
-		return error(p, "failed to parse if block");
+	if ((ret = stat_block(p, s->_if.a)) == 0)
+		return error(p, "Expected '{'");
+	else if (ret < 0)
+		return -1;
 	if (accept(p, TOKEN_ELSE)) {
 		s->_if.b = ecalloc(1, sizeof(Stat));
-		if ((i = stat_block(p, s->_if.b)) <= 0)
-			return error(p, "failed to parse else block");
+		if ((ret = stat_block(p, s->_if.b)) == 0)
+			return error(p, "Expected '{'");
+		else if (ret < 0)
+			return -1;
 	}
 
 	return 1;
@@ -161,7 +172,7 @@ stat_print(Parser *p, Stat *s)
 	s->type = STAT_PRINT;
 
 	if (expr(p, &s->print.expr) <= 0)
-		return error(p, "Failed to parse print expression");
+		return -1;
 
 	if (!accept(p, ';'))
 		return error(p, "Expected ';'");
@@ -197,13 +208,10 @@ stat_block(Parser *p, Stat *s)
 
 	while (!accept(p, '}')) {
 		if (stat(p, &s->block.stats[s->block.nstats++]) <= 0)
-			return error(p, "block: failed to parse statement");
+			return -1;
 	}
 
-	if (!accept(p, '}'))
-		return error(p, "Expected: '}'");
-	else
-		return 1;
+	return 1;
 }
 
 int
@@ -335,7 +343,7 @@ expr_op(Parser *p, Expr *e, int r)
 }
 
 Stat *
-parse(const char *src, unsigned int len)
+parse(const char *path, const char *src, unsigned int len)
 {
 	size_t size = 1024 * sizeof(Stat);
 	int ret;
@@ -346,8 +354,10 @@ parse(const char *src, unsigned int len)
 		return NULL;
 
 	p.accepted = 1;
-	p.begin = src;
-	p.end = src + len;
+	p.path = path;
+	p.src = src;
+	p.len = len;
+	p.i = 0;
 	lexer_init(&p.l, (int (*)(void *))getch, &p);
 
 	s = ecalloc(1, sizeof(Stat));
