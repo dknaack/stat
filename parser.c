@@ -13,13 +13,12 @@
 typedef struct {
 	Lexer l;
 	Token t;
-	int peeked;
+	int accepted;
 	
 	const char *begin, *end;
 } Parser;
 
 static int accept(Parser *p, int type);
-static int peek(Parser *p, int type);
 static int error(Parser *p, const char *msg);
 static int getch(Parser *p);
 
@@ -49,18 +48,10 @@ static const int *rank[] = {
 int
 accept(Parser *p, int type)
 {
-	if (!p->peeked)
+	if (p->accepted)
 		lexer_next(&p->l, &p->t);
-	p->peeked = 0;
-	return p->t.type == type;
-}
-
-int
-peek(Parser *p, int type)
-{
-	accept(p, type);
-	p->peeked = 1;
-	return p->t.type == type;
+	p->accepted = (p->t.type == type);
+	return p->accepted;
 }
 
 int
@@ -123,7 +114,7 @@ stat_if(Parser *p, Stat *s)
 {
 	int i;
 
-	if (!peek(p, TOKEN_IF))
+	if (!accept(p, TOKEN_IF))
 		return 0;
 	accept(p, TOKEN_IF);
 	s->type = STAT_IF;
@@ -134,9 +125,7 @@ stat_if(Parser *p, Stat *s)
 	s->_if.a = ecalloc(1, sizeof(Stat));
 	if ((i = stat_block(p, s->_if.a)) <= 0)
 		return error(p, "failed to parse if block");
-	if (peek(p, TOKEN_ELSE)) {
-		accept(p, TOKEN_ELSE);
-
+	if (accept(p, TOKEN_ELSE)) {
 		s->_if.b = ecalloc(1, sizeof(Stat));
 		if ((i = stat_block(p, s->_if.b)) <= 0)
 			return error(p, "failed to parse else block");
@@ -150,16 +139,15 @@ stat_while(Parser *p, Stat *s)
 {
 	int err;
 
-	if (!peek(p, TOKEN_WHILE))
+	if (!accept(p, TOKEN_WHILE))
 		return 0;
-	accept(p, TOKEN_WHILE);
 	s->type = STAT_WHILE;
 
 	if (expr(p, &s->_while.cond) <= 0)
 		return -1;
 
 	s->_while.body = ecalloc(1, sizeof(Stat));
-	if ((err = stat_block(p, s->_while.body)) <= 0)
+	if (stat_block(p, s->_while.body) <= 0)
 		return -1;
 
 	return 1;
@@ -168,9 +156,8 @@ stat_while(Parser *p, Stat *s)
 int
 stat_print(Parser *p, Stat *s)
 {
-	if (!peek(p, TOKEN_PRINT))
+	if (!accept(p, TOKEN_PRINT))
 		return 0;
-	accept(p, TOKEN_PRINT);
 	s->type = STAT_PRINT;
 
 	if (expr(p, &s->print.expr) <= 0)
@@ -184,9 +171,8 @@ stat_print(Parser *p, Stat *s)
 int
 stat_read(Parser *p, Stat *s)
 {
-	if (!peek(p, TOKEN_READ))
+	if (!accept(p, TOKEN_READ))
 		return 0;
-	accept(p, TOKEN_READ);
 	s->type = STAT_READ;
 
 	if (!accept(p, TOKEN_IDENT))
@@ -203,14 +189,13 @@ stat_block(Parser *p, Stat *s)
 {
 	size_t size = 256 * sizeof(Stat);
 
-	if (!peek(p, '{'))
+	if (!accept(p, '{'))
 		return 0;
-	accept(p, '{');
 	s->type = STAT_BLOCK;
 	s->block.nstats = 0;
 	s->block.stats = ecalloc(1, size);
 
-	while (!peek(p, '}')) {
+	while (!accept(p, '}')) {
 		if (stat(p, &s->block.stats[s->block.nstats++]) <= 0)
 			return error(p, "block: failed to parse statement");
 	}
@@ -224,9 +209,8 @@ stat_block(Parser *p, Stat *s)
 int
 stat_assign(Parser *p, Stat *s, Token t)
 {
-	if (!peek(p, '='))
+	if (!accept(p, '='))
 		return 0;
-	accept(p, '=');
 	s->type = STAT_ASSIGN;
 	s->assign.ident = t.arg.ident;
 
@@ -246,32 +230,28 @@ expr(Parser *p, Expr *e)
 int
 expr_unary(Parser *p, Expr *e)
 {
-	int err;
+	int ret = 1;
 
-	if (peek(p, '-')) {
-		accept(p, '-');
+	if (accept(p, '-')) {
 		e->type = EXPR_OP;
 		e->op.op = OP_NEG;
 		e->op.args = ecalloc(1, sizeof(Expr));
-		if (expr_unary(p, &e->op.args[0]) < 0)
+		if (expr_unary(p, &e->op.args[0]) <= 0)
 			return -1;
-	} else if (peek(p, '!')) {
-		accept(p, '!');
+	} else if (accept(p, '!')) {
 		e->type = EXPR_OP;
 		e->op.op = OP_NOT;
 		e->op.args = ecalloc(1, sizeof(Expr));
-		if (expr_unary(p, &e->op.args[0]) < 0)
+		if (expr_unary(p, &e->op.args[0]) <= 0)
 			return -1;
-	} else if (peek(p, '+')) {
-		accept(p, '+');
+	} else if (accept(p, '+')) {
 		if (expr_unary(p, e) < 0)
 			return -1;
-	} else if ((err = expr_var(p, e))) {
+	} else if ((ret = expr_var(p, e))) {
 		e->type = EXPR_VAR;
-	} else if ((err = expr_val(p, e))) {
+	} else if ((ret = expr_val(p, e))) {
 		e->type = EXPR_VAL;
-	} else if (peek(p, '(')) {
-		accept(p, '(');
+	} else if (accept(p, '(')) {
 		if (expr(p, e) <= 0)
 			return error(p, "Error parsing expression");
 		if (!accept(p, ')'))
@@ -280,14 +260,13 @@ expr_unary(Parser *p, Expr *e)
 		return 0;
 	}
 
-	return 1;
+	return ret;
 }
 
 int
 expr_val(Parser *p, Expr *e)
 {
-	if (peek(p, TOKEN_NUM)) {
-		accept(p, TOKEN_NUM);
+	if (accept(p, TOKEN_NUM)) {
 		e->type = EXPR_VAL;
 		e->val.i = p->t.arg.num;
 		return 1;
@@ -299,8 +278,7 @@ expr_val(Parser *p, Expr *e)
 int
 expr_var(Parser *p, Expr *e)
 {
-	if (peek(p, TOKEN_IDENT)) {
-		accept(p, TOKEN_IDENT);
+	if (accept(p, TOKEN_IDENT)) {
 		e->type = EXPR_VAR;
 		e->var.ident = p->t.arg.ident;
 		return 1;
@@ -323,11 +301,10 @@ expr_op(Parser *p, Expr *e, int r)
 	n = rank[r][0];
 	for (left = *e;; left = *e) {
 		for (i = 1; i <= n; i++)
-			if (peek(p, rank[r][i]))
+			if (accept(p, rank[r][i]))
 				break;
 		if (i > n)
 			break;
-		accept(p, rank[r][i]);
 
 		if (expr_op(p, &right, r + 1) < 0)
 			return -1;
@@ -368,6 +345,7 @@ parse(const char *src, unsigned int len)
 	if (!src || !len)
 		return NULL;
 
+	p.accepted = 1;
 	p.begin = src;
 	p.end = src + len;
 	lexer_init(&p.l, (int (*)(void *))getch, &p);
