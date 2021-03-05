@@ -167,12 +167,13 @@ stat_while(Parser *p, Stat *s)
 int
 stat_print(Parser *p, Stat *s)
 {
+	int ret;
 	if (!accept(p, TOKEN_PRINT))
 		return 0;
 	s->type = STAT_PRINT;
 
-	if (expr(p, &s->print.expr) <= 0)
-		return -1;
+	if ((ret = expr(p, &s->print.expr)) <= 0)
+		return error(p, "Expected expression");
 
 	if (!accept(p, ';'))
 		return error(p, "Expected ';'");
@@ -222,7 +223,7 @@ stat_assign(Parser *p, Stat *s, Token t)
 	s->type = STAT_ASSIGN;
 	s->assign.ident = t.arg.ident;
 
-	if (expr(p, &s->assign.expr) <= 0)
+	if (expr(p, &s->assign.expr) < 0)
 		return error(p, "Invalid expression");
 	if (!accept(p, ';'))
 		return error(p, "Expected ';'");
@@ -298,11 +299,13 @@ expr_var(Parser *p, Expr *e)
 int
 expr_op(Parser *p, Expr *e, int r)
 {
-	int i, n;
+	int i, n, ret;
 	Expr left, right;
 
-	if (r >= LENGTH(rank))
-		return expr_unary(p, e);
+	if (r >= LENGTH(rank)) {
+		ret = expr_unary(p, e);
+		return ret == 0? -1 : ret;
+	}
 
 	if (expr_op(p, e, r + 1) < 0)
 		return -1;
@@ -312,10 +315,10 @@ expr_op(Parser *p, Expr *e, int r)
 			if (accept(p, rank[r][i]))
 				break;
 		if (i > n)
-			break;
+			return 1;
 
-		if (expr_op(p, &right, r + 1) < 0)
-			return -1;
+		if (expr_op(p, &right, r + 1) <= 0)
+			return error(p, "Expected expression");
 
 		e->type = EXPR_OP;
 		e->op.args = ecalloc(2, sizeof(Expr));
@@ -364,7 +367,9 @@ parse(const char *path, const char *src, unsigned int len)
 	s->type = STAT_BLOCK;
 	s->block.nstats = 0;
 	s->block.stats = ecalloc(1, size);
-	while ((ret = stat(&p, &s->block.stats[s->block.nstats++])) > 0) {
+	while (!accept(&p, TOKEN_EOF)) {
+		if ((ret = stat(&p, &s->block.stats[s->block.nstats++])) <= 0)
+			return NULL;
 		if (s->block.nstats + 1 >= size) {
 			size *= 2;
 			if (!(s = realloc(s, size)))
