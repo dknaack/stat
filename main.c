@@ -5,6 +5,7 @@
 #include "stat.h"
 #include "parser.h"
 #include "optimize.h"
+#include "print.h"
 #include "eval.h"
 #include "util.h"
 
@@ -48,6 +49,7 @@ main(int argc, char *argv[])
 	fp = fopen(argv[1], "r");
 	if (read_file(fp, &src, &len) == -1)
 		die("%s:", argv[0]);
+	fclose(fp);
 
 	if (!(stat = parse(argv[1], src, len)))
 		die("Parsing error");
@@ -57,7 +59,9 @@ main(int argc, char *argv[])
 	if (eval(stat, vars) < 0)
 		die("failed to evaluate statement");
 
+	hashmap_free(vars);
 	stat_free(stat);
+	free(stat);
 	free(src);
 	return 0;
 }

@@ -82,6 +82,7 @@ stat_free(Stat *s)
 	case STAT_WHILE:
 		expr_free(&s->_while.cond);
 		stat_free(s->_while.body);
+		free(s->_while.body);
 		break;
 
 	case STAT_PRINT:
