@@ -1,8 +1,13 @@
-typedef struct {
-	long *keys, *vals, size;
-} HashMap;
+#ifndef HASH_H
+#define HASH_H
 
-long hash_str(const char *str);
+#define HASH_STR(str) (str), strlen(str)
 
-void hashmap_set(HashMap *h, long key, long val);
-long hashmap_get(HashMap *h, long key);
+typedef struct HashMap HashMap;
+
+HashMap *hashmap_create(long size);
+void     hashmap_free(HashMap *h);
+void     hashmap_set(HashMap *h, const void *key, long ksize, long val);
+long    *hashmap_get(HashMap *h, const void *key, long ksize);
+
+#endif /* HASH_H */

@@ -8,8 +8,6 @@
 #include "eval.h"
 #include "util.h"
 
-#define NVARS 1024
-
 static int
 read_file(FILE *fp, char **src, unsigned int *len)
 {
@@ -40,12 +38,13 @@ main(int argc, char *argv[])
 	FILE *fp;
 	char *src, *name;
 	unsigned int len;
-	long keys[NVARS] = {0}, vals[NVARS] = {0};
-	HashMap vars = { keys, vals, NVARS };
+	HashMap *vars;
 	Stat *stat;
 
 	if (argc <= 1)
 		die("not enough arguments");
+	if (!(vars = hashmap_create(1024)))
+		die("failed to create hashmap");
 	fp = fopen(argv[1], "r");
 	if (read_file(fp, &src, &len) == -1)
 		die("%s:", argv[0]);
@@ -55,7 +54,7 @@ main(int argc, char *argv[])
 
 	optimize(stat);
 
-	if (eval(stat, &vars) < 0)
+	if (eval(stat, vars) < 0)
 		die("failed to evaluate statement");
 
 	stat_free(stat);

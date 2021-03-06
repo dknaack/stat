@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "hash.h"
 #include "stat.h"
@@ -18,13 +19,13 @@ eval_op(int op, Expr *args, HashMap *vars)
 	case OP_NE:  return  arg != eval_expr(args[1], vars);
 	case OP_LE:  return  arg <= eval_expr(args[1], vars);
 	case OP_GE:  return  arg >= eval_expr(args[1], vars);
-	case OP_LT:  return  arg  < eval_expr(args[1], vars);
-	case OP_GT:  return  arg  > eval_expr(args[1], vars);
-	case OP_ADD: return  arg  + eval_expr(args[1], vars);
-	case OP_SUB: return  arg  - eval_expr(args[1], vars);
-	case OP_MUL: return  arg  * eval_expr(args[1], vars);
-	case OP_DIV: return  arg  / eval_expr(args[1], vars);
-	case OP_MOD: return  arg  % eval_expr(args[1], vars);
+	case OP_LT:  return  arg <  eval_expr(args[1], vars);
+	case OP_GT:  return  arg >  eval_expr(args[1], vars);
+	case OP_ADD: return  arg +  eval_expr(args[1], vars);
+	case OP_SUB: return  arg -  eval_expr(args[1], vars);
+	case OP_MUL: return  arg *  eval_expr(args[1], vars);
+	case OP_DIV: return  arg /  eval_expr(args[1], vars);
+	case OP_MOD: return  arg %  eval_expr(args[1], vars);
 	case OP_NOT: return !arg;
 	case OP_NEG: return -arg;
 	}
@@ -35,10 +36,13 @@ eval_op(int op, Expr *args, HashMap *vars)
 static int
 eval_expr(Expr e, HashMap *vars)
 {
+	long *l;
 	switch (e.type) {
 	case EXPR_OP:  return eval_op(e.op.op, e.op.args, vars);
 	case EXPR_VAL: return e.val.i;
-	case EXPR_VAR: return hashmap_get(vars, hash_str(e.var.ident));
+	case EXPR_VAR: 
+		l = hashmap_get(vars, HASH_STR(e.var.ident));
+		return l? *l : 0;
 	}
 
 	return 0; /* UNREACHABLE */
@@ -49,12 +53,13 @@ eval(Stat *s, HashMap *vars)
 {
 	char *ident;
 	int i, val, ret;
+	long *l;
 
 	switch (s->type) {
 	case STAT_ASSIGN:
 		ident = s->assign.ident;
 		val = eval_expr(s->assign.expr, vars);
-		hashmap_set(vars, hash_str(ident), val);
+		hashmap_set(vars, HASH_STR(ident), val);
 		break;
 
 	case STAT_IF:
@@ -78,7 +83,7 @@ eval(Stat *s, HashMap *vars)
 	case STAT_READ:
 		printf("%s = ", s->read.ident);
 		scanf("%d", &val);
-		hashmap_set(vars, hash_str(s->read.ident), val);
+		hashmap_set(vars, HASH_STR(s->read.ident), val);
 		break;
 
 	case STAT_PRINT:
