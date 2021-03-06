@@ -1,0 +1,14 @@
+read a;
+read b;
+
+c = 0;
+while a != 0 {
+	if a % 2 == 1 {
+		c = c + b;
+	}
+
+	a = a / 2;
+	b = b * 2;
+}
+
+print c;

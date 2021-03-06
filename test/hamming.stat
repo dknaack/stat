@@ -1,0 +1,9 @@
+read a;
+
+b = 0;
+while a != 0 {
+	b = b + a % 2;
+	a = a / 2;
+}
+
+print b;
